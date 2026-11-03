@@ -1,0 +1,61 @@
+name: Setup styro
+description: Set up a specific version of styro
+inputs:
+  styro-version:
+    description: Version of styro to set up
+    default: latest
+branding:
+  icon: package
+  color: blue
+runs:
+  using: "composite"
+  steps:
+    - name: Install styro
+      env:
+        STYRO_VERSION: ${{ inputs.styro-version }}
+      run: |
+        set -euo pipefail
+
+        version="${STYRO_VERSION#v}"
+        if [ "$version" = "latest" ]; then
+          release_url="https://github.com/gerlero/styro/releases/latest/download"
+        elif [[ "$version" =~ ^([0-9]+\.){2}[0-9]+([._+][0-9A-Za-z.-]+)?$ ]]; then
+          release_url="https://github.com/gerlero/styro/releases/download/v$version"
+        else
+          echo "Unsupported styro version: $STYRO_VERSION" >&2
+          echo "Use 'latest' or a version such as '0.1.39'." >&2
+          exit 1
+        fi
+
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)
+            asset="styro-Linux-x86_64.tar.gz"
+            ;;
+          Linux-ARM64)
+            asset="styro-Linux-aarch64.tar.gz"
+            ;;
+          macOS-X64)
+            asset="styro-Darwin-x86_64.tar.gz"
+            ;;
+          macOS-ARM64)
+            asset="styro-Darwin-arm64.tar.gz"
+            ;;
+          *)
+            echo "styro does not provide a binary for $RUNNER_OS-$RUNNER_ARCH." >&2
+            exit 1
+            ;;
+        esac
+
+        install_dir="${RUNNER_TOOL_CACHE:-$RUNNER_TEMP}/styro/$version/$RUNNER_ARCH"
+        archive="$RUNNER_TEMP/$asset"
+
+        mkdir -p "$install_dir"
+        curl --fail --location --silent --show-error --retry 3 \
+          "$release_url/$asset" \
+          --output "$archive"
+        tar -xzf "$archive" -C "$install_dir"
+        chmod +x "$install_dir/styro"
+        rm -f "$archive"
+
+        echo "$install_dir" >> "$GITHUB_PATH"
+      shell: bash
